@@ -1,0 +1,25 @@
+:root {
+  --true-black: #000000;
+  --neon-green: #39ff14;
+  --neon-green-dim: rgba(57, 255, 20, 0.2);
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--true-black)] text-white font-sans antialiased;
+  }
+}
+
+@layer components {
+  .btn-neon {
+    @apply px-4 py-2 border border-[var(--neon-green)] text-[var(--neon-green)] rounded hover:bg-[var(--neon-green)] hover:text-[var(--true-black)] transition-all duration-300;
+  }
+  
+  .text-neon {
+    @apply text-[var(--neon-green)] drop-shadow-[0_0_5px_var(--neon-green)];
+  }
+  
+  .border-neon {
+    @apply border border-[var(--neon-green)] shadow-[0_0_10px_var(--neon-green-dim)];
+  }
+}
