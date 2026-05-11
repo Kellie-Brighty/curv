@@ -1,37 +1,90 @@
 import React, { useState } from 'react';
-import { useWatchContractEvent } from 'wagmi';
+import { useWatchContractEvent, useAccount, useBalance, useReadContract, useConnect, useDisconnect } from 'wagmi';
+import { formatEther } from 'viem';
+import { sepolia } from 'viem/chains';
+import { motion, AnimatePresence } from 'framer-motion';
 import LDFSkyline from './LDFSkyline';
 import ExecutePanel from './ExecutePanel';
 import Manifesto from './Manifesto';
+import { HOOK_ADDRESS, TOKEN_ADDRESS } from '../constants/contracts';
 
-const CURV_HOOK_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+import MockCURV_ABI from '../abi/MockCURV.json';
+import Lo0pLarp_ABI from '../abi/Lo0pLarp.json';
+
+const ERC20_ABI = [
+  { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
+] as const;
 
 const Terminal: React.FC = () => {
-  const [hoverData, setHoverData] = useState({ reserve: '1,240.50', price: '0.001757' });
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+  
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Real-time Hook Syncing: Watch for events and update chart
+  // 1. Live Data Fetching
+  const { data: ethBalance, refetch: refetchEth } = useBalance({ address });
+  
+  const { data: tokenBalance, refetch: refetchToken } = useReadContract({
+    address: TOKEN_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    chainId: sepolia.id
+  });
+  
+  const { data: userCollateral, refetch: refetchCollateral } = useReadContract({
+    address: HOOK_ADDRESS,
+    abi: Lo0pLarp_ABI as any,
+    functionName: 'collateral',
+    args: address ? [address] : undefined,
+    chainId: sepolia.id
+  });
+
+  // Fetch Hook's CURV balance (Collateral Reserve)
+  const { data: hookReserve, refetch: refetchReserve } = useReadContract({
+    address: TOKEN_ADDRESS,
+    abi: MockCURV_ABI as any,
+    functionName: 'balanceOf',
+    args: [HOOK_ADDRESS],
+    chainId: sepolia.id
+  });
+
+  // 2. Real-time Hook Syncing
   useWatchContractEvent({
-    address: CURV_HOOK_ADDRESS,
-    abi: [
-      { name: 'Borrow', type: 'event', inputs: [{ indexed: true, name: 'user', type: 'address' }, { name: 'amount', type: 'uint256' }] },
-      { name: 'Mint', type: 'event', inputs: [{ indexed: true, name: 'user', type: 'address' }, { name: 'amount', type: 'uint256' }] }
-    ] as const,
+    address: HOOK_ADDRESS,
+    abi: Lo0pLarp_ABI as any,
+    eventName: 'Deposit' as any,
     onLogs() {
       setRefreshKey(prev => prev + 1);
+      refetchEth();
+      refetchCollateral();
+      refetchReserve();
+    },
+  });
+
+  useWatchContractEvent({
+    address: HOOK_ADDRESS,
+    abi: Lo0pLarp_ABI as any,
+    eventName: 'Borrow' as any,
+    onLogs() {
+      setRefreshKey(prev => prev + 1);
+      refetchToken();
+      refetchReserve();
     },
   });
 
   const tickerStats = [
-    { label: 'Pool Total', value: `${hoverData.reserve} ETH`, live: true },
-    { label: 'Spot Price', value: `${hoverData.price} ETH`, live: true },
-    { label: 'Active Bands', value: '84/100', live: true },
-    { label: 'Avg LTV', value: '40%', live: true },
-    { label: 'Network', value: 'Mainnet', color: '#00ff88' },
+    { label: 'User CURV', value: isConnected ? `${tokenBalance ? formatEther(tokenBalance as bigint).slice(0, 8) : '0.00'} CURV` : '0.00 CURV', live: true },
+    { label: 'User ETH', value: isConnected ? `${ethBalance ? formatEther(ethBalance.value).slice(0, 6) : '0.00'} ETH` : '0.00 ETH', live: true },
+    { label: 'Collateral Locked', value: isConnected ? `${userCollateral ? formatEther(userCollateral as bigint).slice(0, 8) : '0.00'} CURV` : '0.00 CURV', live: true },
+    { label: 'Pool CURV', value: `${hookReserve ? formatEther(hookReserve as bigint).slice(0, 10) : '...'} CURV`, live: true },
+    { label: 'Network', value: 'Sepolia', color: '#00ff88' },
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col font-mono selection:bg-[#00ff88] selection:text-black">
+    <div className="min-h-screen bg-black text-white flex flex-col font-mono selection:bg-[#00ff88] selection:text-black overflow-x-hidden">
       {/* Navigation Header */}
       <nav className="flex justify-between items-center px-8 py-6 w-full bg-black border-b border-[#1A1A1A] z-50">
         <div className="flex items-center gap-12">
@@ -48,16 +101,19 @@ const Terminal: React.FC = () => {
           <span className="text-[9px] text-[#999999] tracking-[0.2em] uppercase font-bold hidden sm:block">
             Status: <span className="text-[#00ff88]">Online</span>
           </span>
-          <button className="text-[10px] tracking-[0.2em] border border-white text-white px-6 py-2 font-bold uppercase hover:bg-white hover:text-black transition-all">
-            Connect Wallet →
+          <button 
+            onClick={() => isConnected ? disconnect() : setIsConnectModalOpen(true)}
+            className="text-[10px] tracking-[0.2em] border border-white text-white px-6 py-2 font-bold uppercase hover:bg-white hover:text-black transition-all"
+          >
+            {isConnected ? `${address?.slice(0,6)}...${address?.slice(-4)} (X)` : 'Connect Wallet →'}
           </button>
         </div>
       </nav>
 
       {/* Real-time Ticker Bar */}
       <div className="flex bg-black border-b border-[#1A1A1A] px-8 py-3 overflow-x-auto no-scrollbar whitespace-nowrap">
-        {tickerStats.map((stat, i) => (
-          <div key={i} className="flex items-center gap-3 mr-12 text-[10px] tracking-widest uppercase font-medium">
+        {tickerStats.map((stat) => (
+          <div key={stat.label} className="flex items-center gap-3 mr-12 text-[10px] tracking-widest uppercase font-medium">
             <span className="text-[#999999]">{stat.label}:</span>
             <span className={`font-bold ${stat.live ? 'text-[#00ff88]' : 'text-white'}`}>
               {stat.value}
@@ -85,7 +141,6 @@ const Terminal: React.FC = () => {
             <div className="flex-1 border border-[#1A1A1A] bg-[#050505]/50 backdrop-blur-sm relative min-h-[400px]">
               <LDFSkyline 
                 refreshKey={refreshKey}
-                onUpdate={(reserve, price) => setHoverData({ reserve, price })} 
               />
             </div>
           </div>
@@ -105,6 +160,55 @@ const Terminal: React.FC = () => {
           <a href="#" className="hover:text-white transition-colors">Audit</a>
         </div>
       </footer>
+
+      {/* Wallet Connect Modal */}
+      <AnimatePresence>
+        {isConnectModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsConnectModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-[#050505] border border-white/10 p-10 space-y-8 shadow-[0_0_50px_rgba(0,255,136,0.1)]"
+            >
+              <div className="space-y-2">
+                <h2 className="text-2xl font-serif italic">Connect Wallet</h2>
+                <p className="text-[10px] text-[#999999] uppercase tracking-[0.2em]">Select your preferred interface</p>
+              </div>
+
+              <div className="grid gap-4">
+                {connectors.map((connector) => (
+                  <button
+                    key={connector.id}
+                    onClick={() => {
+                      connect({ connector });
+                      setIsConnectModalOpen(false);
+                    }}
+                    className="group flex items-center justify-between p-6 border border-[#1A1A1A] hover:border-[#00ff88] hover:bg-[#00ff88]/5 transition-all text-left"
+                  >
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em]">{connector.name}</span>
+                    <div className="h-2 w-2 rounded-full bg-[#333333] group-hover:bg-[#00ff88] transition-colors" />
+                  </button>
+                ))}
+              </div>
+
+              <button 
+                onClick={() => setIsConnectModalOpen(false)}
+                className="w-full text-[9px] text-[#666666] uppercase tracking-[0.4em] hover:text-white transition-colors"
+              >
+                Close Window
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
