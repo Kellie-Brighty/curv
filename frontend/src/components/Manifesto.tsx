@@ -1,11 +1,12 @@
 import React from 'react';
+import { MAINNET_POOL_KEY } from '../constants/contracts';
 
 const Manifesto: React.FC = () => {
   const params = [
     { label: 'Token', value: 'CURV' },
     { label: 'Max Supply', value: '1,000,000' },
     { label: 'LTV', value: '40%' },
-    { label: 'Fee', value: '1.00%' },
+    { label: 'Fee', value: `${(MAINNET_POOL_KEY.fee / 10000).toFixed(2)}%` },
     { label: 'Chain', value: 'Ethereum' },
   ];
 

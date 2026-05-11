@@ -10,7 +10,7 @@ export const config = createConfig({
     coinbaseWallet({ appName: 'curv' }),
   ],
   transports: {
-    [mainnet.id]: http(),
+    [mainnet.id]: http(import.meta.env.VITE_MAINNET_RPC_URL),
     [sepolia.id]: http(),
   },
 })
