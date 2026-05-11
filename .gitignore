@@ -11,8 +11,9 @@ out/
 # Docs
 docs/
 
-# Dotenv file
+# Dotenv files
 .env
+**/.env*
 
 # Node modules
 node_modules/scratch/
