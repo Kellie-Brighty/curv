@@ -13,7 +13,7 @@ import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
  */
 contract DeployCurvMainnet is Script {
     // Canonical Uniswap V4 PoolManager Address
-    address constant POOL_MANAGER = 0x1f98400000000000000000000000000000000004;
+    address constant POOL_MANAGER = 0x1F98000000000000000000000000000000000004;
     
     // Official CURV Token Address (Mainnet)
     address constant CURV_TOKEN = 0xB9aC1186AE06f1bC31274612C1AdBB9eC6040AA9; // Replace with actual Mainnet address

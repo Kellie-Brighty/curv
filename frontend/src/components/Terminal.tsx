@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWatchContractEvent, useAccount, useBalance, useReadContract, useConnect, useDisconnect } from 'wagmi';
 import { formatEther } from 'viem';
-import { sepolia } from 'viem/chains';
+import { mainnet } from 'viem/chains';
 import { motion, AnimatePresence } from 'framer-motion';
 import LDFSkyline from './LDFSkyline';
+import FlowDiagram from './FlowDiagram';
 import ExecutePanel from './ExecutePanel';
 import Manifesto from './Manifesto';
+import Docs from './Docs';
 import { HOOK_ADDRESS, TOKEN_ADDRESS } from '../constants/contracts';
 
-import MockCURV_ABI from '../abi/MockCURV.json';
 import Lo0pLarp_ABI from '../abi/Lo0pLarp.json';
 
 const ERC20_ABI = [
@@ -22,6 +23,31 @@ const Terminal: React.FC = () => {
   
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [currentView, setCurrentView] = useState<'DASHBOARD' | 'DOCS'>('DASHBOARD');
+
+  // 0. Auto-Refresh Heartbeat
+  useEffect(() => {
+    if (!isConnected) return;
+    
+    const interval = setInterval(() => {
+      refetchEth();
+      refetchToken();
+      refetchCollateral();
+      refetchReserve();
+    }, 15000); // Refresh every 15s
+
+    return () => clearInterval(interval);
+  }, [isConnected, address]);
+
+  // Initial fetch on connect
+  useEffect(() => {
+    if (isConnected) {
+      refetchEth();
+      refetchToken();
+      refetchCollateral();
+      refetchReserve();
+    }
+  }, [isConnected, address]);
 
   // 1. Live Data Fetching
   const { data: ethBalance, refetch: refetchEth } = useBalance({ address });
@@ -31,7 +57,7 @@ const Terminal: React.FC = () => {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    chainId: sepolia.id
+    chainId: mainnet.id
   });
   
   const { data: userCollateral, refetch: refetchCollateral } = useReadContract({
@@ -39,16 +65,16 @@ const Terminal: React.FC = () => {
     abi: Lo0pLarp_ABI as any,
     functionName: 'collateral',
     args: address ? [address] : undefined,
-    chainId: sepolia.id
+    chainId: mainnet.id
   });
 
   // Fetch Hook's CURV balance (Collateral Reserve)
   const { data: hookReserve, refetch: refetchReserve } = useReadContract({
     address: TOKEN_ADDRESS,
-    abi: MockCURV_ABI as any,
+    abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [HOOK_ADDRESS],
-    chainId: sepolia.id
+    chainId: mainnet.id
   });
 
   // 2. Real-time Hook Syncing
@@ -80,7 +106,7 @@ const Terminal: React.FC = () => {
     { label: 'User ETH', value: isConnected ? `${ethBalance ? formatEther(ethBalance.value).slice(0, 6) : '0.00'} ETH` : '0.00 ETH', live: true },
     { label: 'Collateral Locked', value: isConnected ? `${userCollateral ? formatEther(userCollateral as bigint).slice(0, 8) : '0.00'} CURV` : '0.00 CURV', live: true },
     { label: 'Pool CURV', value: `${hookReserve ? formatEther(hookReserve as bigint).slice(0, 10) : '...'} CURV`, live: true },
-    { label: 'Network', value: 'Sepolia', color: '#00ff88' },
+    { label: 'Network', value: 'Mainnet', color: '#00ff88' },
   ];
 
   return (
@@ -88,13 +114,20 @@ const Terminal: React.FC = () => {
       {/* Navigation Header */}
       <nav className="flex justify-between items-center px-8 py-6 w-full bg-black border-b border-[#1A1A1A] z-50">
         <div className="flex items-center gap-12">
-          <div className="text-white text-3xl font-serif lowercase tracking-widest hover:text-[#00ff88] transition-colors cursor-pointer">
+          <div 
+            onClick={() => setCurrentView('DASHBOARD')}
+            className="text-white text-3xl font-serif lowercase tracking-widest hover:text-[#00ff88] transition-colors cursor-pointer"
+          >
             curv
           </div>
           <div className="hidden lg:flex gap-8 text-[10px] tracking-[0.4em] text-[#999999] uppercase font-bold">
             <a href="#" className="hover:text-white transition-colors">Trade</a>
-            <a href="#" className="hover:text-white transition-colors">Curve</a>
-            <a href="#" className="hover:text-white transition-colors">Docs</a>
+            <button 
+              onClick={() => setCurrentView('DOCS')}
+              className={`hover:text-white transition-colors ${currentView === 'DOCS' ? 'text-white' : ''}`}
+            >
+              Docs
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -123,41 +156,51 @@ const Terminal: React.FC = () => {
       </div>
 
       <div className="flex-1 flex flex-col">
-        <div className="grid grid-cols-12 min-h-[600px]">
-          <div className="col-span-12 lg:col-span-8 border-r border-[#1A1A1A] flex flex-col p-12 space-y-10">
-            <div className="relative z-20 space-y-4">
-              <div className="flex items-center gap-3">
-                 <div className="h-[1px] w-8 bg-[#00ff88]"></div>
-                 <span className="text-[9px] tracking-[0.4em] text-[#00ff88] uppercase font-bold">Protocol Dashboard v0.1</span>
+        {currentView === 'DASHBOARD' ? (
+          <>
+            <div className="grid grid-cols-12 min-h-[600px]">
+              <div className="col-span-12 lg:col-span-8 border-r border-[#1A1A1A] flex flex-col p-12 space-y-10">
+                <div className="relative z-20 space-y-4">
+                  <div className="flex items-center gap-3">
+                     <div className="h-[1px] w-8 bg-[#00ff88]"></div>
+                     <span className="text-[9px] tracking-[0.4em] text-[#00ff88] uppercase font-bold">Protocol Dashboard v0.1</span>
+                  </div>
+                  <h1 className="leading-none">
+                    <span className="font-serif italic font-light text-7xl text-white">Liquidity</span><br />
+                    <span className="font-sans font-black text-6xl uppercase tracking-tighter text-[#00ff88] drop-shadow-[0_0_20px_rgba(0,255,136,0.4)]">
+                      that does work.
+                    </span>
+                  </h1>
+                </div>
+
+                <div className="flex-1 border border-[#1A1A1A] bg-[#050505]/50 backdrop-blur-sm relative min-h-[400px]">
+                  <LDFSkyline 
+                    refreshKey={refreshKey}
+                  />
+                </div>
               </div>
-              <h1 className="leading-none">
-                <span className="font-serif italic font-light text-7xl text-white">Liquidity</span><br />
-                <span className="font-sans font-black text-6xl uppercase tracking-tighter text-[#00ff88] drop-shadow-[0_0_20px_rgba(0,255,136,0.4)]">
-                  that does work.
-                </span>
-              </h1>
+
+              <div className="col-span-12 lg:col-span-4 h-full">
+                 <ExecutePanel />
+              </div>
             </div>
 
-            <div className="flex-1 border border-[#1A1A1A] bg-[#050505]/50 backdrop-blur-sm relative min-h-[400px]">
-              <LDFSkyline 
-                refreshKey={refreshKey}
-              />
+            <div className="w-full border-b border-[#1A1A1A] py-20 bg-[#020202]">
+              <FlowDiagram />
             </div>
-          </div>
 
-          <div className="col-span-12 lg:col-span-4 h-full">
-             <ExecutePanel />
-          </div>
-        </div>
-        <Manifesto />
+            <Manifesto />
+          </>
+        ) : (
+          <Docs />
+        )}
       </div>
 
       <footer className="p-8 border-t border-[#1A1A1A] flex justify-between items-center bg-[#050505]">
         <span className="text-[10px] text-[#999999] uppercase tracking-widest">© 2026 CURV PROTOCOL</span>
         <div className="flex gap-8 text-[10px] text-[#999999] uppercase tracking-widest">
           <a href="#" className="hover:text-white transition-colors">Twitter</a>
-          <a href="#" className="hover:text-white transition-colors">Github</a>
-          <a href="#" className="hover:text-white transition-colors">Audit</a>
+          <a href="#" className="hover:text-white transition-colors">Telegram</a>
         </div>
       </footer>
 
