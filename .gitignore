@@ -12,7 +12,6 @@ out/
 docs/
 
 # Dotenv files
-.env
 **/.env*
 
 # Node modules
@@ -20,3 +19,5 @@ node_modules/scratch/
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat
+node_modules
